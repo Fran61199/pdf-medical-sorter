@@ -268,4 +268,4 @@ if uploaded is not None:
     except Exception as e:
         st.error(f"Error leyendo el PDF: {e}")
 else:
-    st.caption("Formato soportado: .pdf — El procesamiento ocurre en memoria (sin guardar archivos en disco).")
+    st.caption("Formatos soportados: .pdf — El procesamiento ocurre en memoria (sin guardar archivos en disco).")
