@@ -13,7 +13,7 @@ from pypdf import PdfReader, PdfWriter
 STRICT_START = True        # más tolerante: no exige inicio exacto
 RELAXED_FALLBACK = False     # si no encuentra arriba, busca en TODO el texto de la página
 CERT_NEAR_WINDOW = 200      # ventana para proximidad "certificado ... aptitud"
-TOP_LINES_K = 6             # cuántas primeras líneas revisar
+TOP_LINES_K = 4             # cuántas primeras líneas revisar
 SHOW_DEBUG = False          # pon True si quieres ver el log en pantalla
 # -------------------------------------------
 
@@ -51,6 +51,7 @@ def first_nonempty_lines(text: str, k: int = TOP_LINES_K) -> List[str]:
     return out
 
 def has_title_in_lines(text: str, pattern: str, strict_start: bool) -> bool:
+    # 1) línea por línea
     for ln in first_nonempty_lines(text, k=TOP_LINES_K):
         if strict_start:
             if re.search(rf"^\s*{pattern}\b", ln):
@@ -58,7 +59,13 @@ def has_title_in_lines(text: str, pattern: str, strict_start: bool) -> bool:
         else:
             if re.search(pattern, ln):
                 return True
-    return False
+    # 2) encabezado unido (maneja títulos partidos en varias líneas)
+    head = normalize_text_hard(" ".join(first_nonempty_lines(text, k=TOP_LINES_K)))
+    if strict_start:
+        return re.search(rf"^\s*{pattern}\b", head) is not None
+    else:
+        return re.search(pattern, head) is not None
+
 
 def has_token_in_top_lines(text: str, token_pat: str, k: int = TOP_LINES_K) -> bool:
     for ln in first_nonempty_lines(text, k=k):
