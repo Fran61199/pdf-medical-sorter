@@ -13,7 +13,7 @@ from pypdf import PdfReader, PdfWriter
 STRICT_START = True        # más tolerante: no exige inicio exacto
 RELAXED_FALLBACK = False     # si no encuentra arriba, busca en TODO el texto de la página
 CERT_NEAR_WINDOW = 200      # ventana para proximidad "certificado ... aptitud"
-TOP_LINES_K = 4             # cuántas primeras líneas revisar
+TOP_LINES_K = 6             # cuántas primeras líneas revisar
 SHOW_DEBUG = False          # pon True si quieres ver el log en pantalla
 # -------------------------------------------
 
