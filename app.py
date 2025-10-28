@@ -50,17 +50,21 @@ def first_nonempty_lines(text: str, k: int = TOP_LINES_K) -> List[str]:
     return out
 
 def has_title_in_lines(text: str, pattern: str, strict_start: bool) -> bool:
+    lines = first_nonempty_lines(text, k=TOP_LINES_K)
     # 1) línea por línea
-    for ln in first_nonempty_lines(text, k=TOP_LINES_K):
+    for ln in lines:
         if strict_start:
             if re.search(rf"^\s*{pattern}\b", ln):
                 return True
         else:
             if re.search(pattern, ln):
                 return True
-    # 2) encabezado unido (maneja títulos partidos en varias líneas)
-    head = normalize_text_hard(" ".join(first_nonempty_lines(text, k=TOP_LINES_K)))
+    # 2) encabezado unido: ignorar palabras previas (ej. 'examen periódico')
+    head = normalize_text_hard(" ".join(lines))
+    # quitar posibles encabezados previos
+    head = re.sub(r"^(examen|periodico|evaluacion|ficha)\s+\w+\s+", "", head)
     return re.search(pattern, head) is not None
+
 
 
 def has_token_in_top_lines(text: str, token_pat: str, k: int = TOP_LINES_K) -> bool:
