@@ -18,10 +18,7 @@ SHOW_DEBUG = False
 # -------------------------------------------
 
 # Patrones para "INFORME MÉDICO"
-PAT_INFO = [
-    r"(?:informe\s+m[eé]dico(?:\s+ocupacional)?)",
-    r"(?:informe\s+(?:m[eé]dico(?:\s+ocupacional)?|examen\s+m[eé]dico))",
-]
+PAT_INFO = r"(?:informe\s+(?:del\s+)?(?:m[eé]dico(?:\s+ocupacional)?|examen\s+m[eé]dico))"
 PAT_CERT_TITLES = [
     r"certificad[oa]\s+de\s+aptitud\s+m[eé]dic[ao]\s+ocupacional",
     r"certificad[oa]\s+m[eé]dic[ao]\s+ocupacional\s+de\s+aptitud",
