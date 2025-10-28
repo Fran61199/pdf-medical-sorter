@@ -60,10 +60,7 @@ def has_title_in_lines(text: str, pattern: str, strict_start: bool) -> bool:
                 return True
     # 2) encabezado unido (maneja títulos partidos en varias líneas)
     head = normalize_text_hard(" ".join(first_nonempty_lines(text, k=TOP_LINES_K)))
-    if strict_start:
-        return re.search(rf"^\s*{pattern}\b", head) is not None
-    else:
-        return re.search(pattern, head) is not None
+    return re.search(pattern, head) is not None
 
 
 def has_token_in_top_lines(text: str, token_pat: str, k: int = TOP_LINES_K) -> bool:
