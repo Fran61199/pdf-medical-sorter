@@ -13,7 +13,7 @@ from pypdf import PdfReader, PdfWriter
 STRICT_START = False
 RELAXED_FALLBACK = True
 CERT_NEAR_WINDOW = 200
-TOP_LINES_K = 4
+TOP_LINES_K = 3
 SHOW_DEBUG = False
 # -------------------------------------------
 
