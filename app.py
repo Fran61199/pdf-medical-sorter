@@ -223,3 +223,11 @@ if uploaded_files:
                        mime="application/zip")
 else:
     st.caption("Formatos soportados: .pdf — El procesamiento ocurre en memoria (sin guardar archivos en disco).")
+# =============== FOOTER ===============
+st.markdown("---")
+st.markdown(
+    "<p style='text-align:center; color:gray; font-size:14px;'>"
+    "Creado por: <b>Equipo de Customer Success</b>"
+    "</p>",
+    unsafe_allow_html=True
+)
