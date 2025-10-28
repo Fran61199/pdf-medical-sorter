@@ -10,11 +10,11 @@ import streamlit as st
 from pypdf import PdfReader, PdfWriter
 
 # ------------------ Config ------------------
-STRICT_START = True        # más tolerante: no exige inicio exacto
-RELAXED_FALLBACK = False     # si no encuentra arriba, busca en TODO el texto de la página
-CERT_NEAR_WINDOW = 200      # ventana para proximidad "certificado ... aptitud"
-TOP_LINES_K = 10            # cuántas primeras líneas revisar
-SHOW_DEBUG = False          # pon True si quieres ver el log en pantalla
+STRICT_START = True        # solo cabecera (inicio de línea)
+RELAXED_FALLBACK = False   # no escanear toda la página
+CERT_NEAR_WINDOW = 200
+TOP_LINES_K = 10
+SHOW_DEBUG = False
 # -------------------------------------------
 
 # Patrones para "INFORME MÉDICO"
@@ -27,8 +27,6 @@ PAT_CERT_TITLES = [
 
 # =============== Utilidades de texto ===============
 def normalize_text_hard(s: str) -> str:
-    """Minimiza falsos negativos: quita acentos, baja a minúsculas y
-    reemplaza cualquier no-alfanumérico por espacio."""
     if not s:
         return ""
     s = unicodedata.normalize("NFD", s)
@@ -61,17 +59,14 @@ def has_title_in_lines(text: str, pattern: str, strict_start: bool) -> bool:
                 return True
     # 2) encabezado unido (maneja títulos partidos)
     head = normalize_text_hard(" ".join(lines))
-    # quitar posibles encabezados previos
+    # quitar posibles encabezados previos que suelen ir antes
     head = re.sub(r"^(examen|periodico|evaluacion|ficha)\s+\w+\s+", "", head)
     if re.search(pattern, head):
         return True
-    # 3) tolerar espaciado letra-a-letra: comparamos sin espacios
+    # 3) tolerar espaciado letra-a-letra: comparar sin espacios
     head_compact = head.replace(" ", "")
     pat_compact  = re.sub(r"\s+", "", pattern)
     return re.search(pat_compact, head_compact) is not None
-
-
-
 
 def has_token_in_top_lines(text: str, token_pat: str, k: int = TOP_LINES_K) -> bool:
     for ln in first_nonempty_lines(text, k=k):
@@ -80,37 +75,26 @@ def has_token_in_top_lines(text: str, token_pat: str, k: int = TOP_LINES_K) -> b
     return False
 
 def search_cert_proximity(full_norm: str) -> bool:
-    """Heurística flexible en TODO el texto de la PÁGINA:
-    A) 'certificad*' ... 'aptitud' a <= CERT_NEAR_WINDOW (en ese orden)
-       y ('medic' o 'ocupacional' en la página).
-    B) 'certificad*' ... ('medic'| 'ocupacional') ... 'aptitud' en ventana cercana."""
     has_mod = ("medic" in full_norm) or ("ocupacional" in full_norm)
     if not has_mod:
         return False
-
-    # A) certificad* ... aptitud
     for m in re.finditer(r"\bcertificad\w*\b", full_norm):
         start = m.end()
         window = full_norm[start:start + CERT_NEAR_WINDOW]
         if re.search(r"\baptitud\b", window):
             return True
-
-    # B) certificad* ... (medic|ocupacional) ... aptitud
     for m in re.finditer(r"\bcertificad\w*\b", full_norm):
         start = m.end()
         window = full_norm[start:start + CERT_NEAR_WINDOW]
         if re.search(r"(medic\w*|ocupacional)", window) and re.search(r"\baptitud\b", window):
             return True
-
     return False
 
 # =============== Detección por página ===============
 def is_cert_page(text: str) -> bool:
-    # 1) primeras líneas
     for pat in PAT_CERT_TITLES:
         if has_title_in_lines(text, pat, strict_start=STRICT_START):
             return True
-    # 2) fallback en TODO el texto
     if RELAXED_FALLBACK:
         full = normalize_text_hard(text or "")
         for pat in PAT_CERT_TITLES:
@@ -119,13 +103,9 @@ def is_cert_page(text: str) -> bool:
         if search_cert_proximity(full):
             return True
 
-  
-
 def is_info_page(text: str) -> bool:
-    # 1) primeras líneas
     if has_title_in_lines(text, PAT_INFO, strict_start=STRICT_START):
         return True
-    # 2) fallback en TODO el texto
     if RELAXED_FALLBACK:
         full = normalize_text_hard(text or "")
         if re.search(PAT_INFO, full):
@@ -149,17 +129,14 @@ def classify_pages(reader: PdfReader) -> Tuple[Set[int], Set[int], List[str]]:
         else:
             labels_log.append(f"p.{i+1:03d} => OTROS")
 
-    # Eliminar posibles solapes (prioridad CERT)
     overlap = cert_set & info_set
     if overlap:
         info_set -= overlap
         labels_log.append(f"[ajuste] {len(overlap)} págs quitadas de INFORME por solape con CERT.")
-
     return cert_set, info_set, labels_log
 
 # =============== Escritura PDFs en memoria ===============
 def write_pdf_to_bytes(reader: PdfReader, idxs: List[int]) -> bytes:
-    """Devuelve un PDF (bytes) con las páginas indicadas."""
     if not idxs:
         return b""
     w = PdfWriter()
@@ -173,99 +150,76 @@ def write_pdf_to_bytes(reader: PdfReader, idxs: List[int]) -> bytes:
 # =============== UI Streamlit ===============
 st.set_page_config(page_title="Clasificar PDF Médico", page_icon="🩺", layout="centered")
 st.title("🩺 Clasificar PDF: Certificado / Informe / Historia")
-st.caption("Sube un PDF y genera los documentos clasificados para descargar.")
+st.caption("Sube uno o varios PDF y genera los documentos clasificados para descargar.")
 
-uploaded = st.file_uploader("Adjunta un PDF", type=["pdf"])
+# 🔹 Ahora acepta múltiples archivos
+uploaded_files = st.file_uploader("Adjunta uno o varios PDF", type=["pdf"], accept_multiple_files=True)
 
-if uploaded is not None:
-    try:
-        # Leer PDF desde el archivo subido (en memoria)
-        file_bytes = uploaded.read()
-        reader = PdfReader(io.BytesIO(file_bytes))
-        total = len(reader.pages)
+if uploaded_files:
+    # ZIP maestro con todos los resultados de todos los PDFs
+    zip_master_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_master_buffer, "w", zipfile.ZIP_DEFLATED) as zip_master:
 
-        st.info(f"👀 Páginas detectadas: **{total}**")
+        for idx, uploaded in enumerate(uploaded_files, start=1):
+            try:
+                file_bytes = uploaded.read()
+                reader = PdfReader(io.BytesIO(file_bytes))
+                total = len(reader.pages)
 
-        # Clasificar
-        cert_set, info_set, labels_log = classify_pages(reader)
-        all_set = set(range(total))
-        hist_set = all_set - cert_set - info_set
+                cert_set, info_set, labels_log = classify_pages(reader)
+                all_set = set(range(total))
+                hist_set = all_set - cert_set - info_set
 
-        cert = sorted(cert_set)
-        info = sorted(info_set)
-        hist = sorted(hist_set)
+                cert = sorted(cert_set)
+                info = sorted(info_set)
+                hist = sorted(hist_set)
 
-        # Construir PDFs en memoria
-        pdf_cert = write_pdf_to_bytes(reader, cert)
-        pdf_info = write_pdf_to_bytes(reader, info)
-        pdf_hist = write_pdf_to_bytes(reader, hist)
-        pdf_legajo = write_pdf_to_bytes(reader, cert + info + hist)
+                pdf_cert   = write_pdf_to_bytes(reader, cert)
+                pdf_info   = write_pdf_to_bytes(reader, info)
+                pdf_hist   = write_pdf_to_bytes(reader, hist)
+                pdf_legajo = write_pdf_to_bytes(reader, cert + info + hist)
 
-        # Mostrar conteos
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Certificado", len(cert))
-        col2.metric("Informe", len(info))
-        col3.metric("Historia", len(hist))
-        col4.metric("Total", total)
+                # Panel por archivo
+                with st.expander(f"📄 {uploaded.name} — págs: {total} (Cert:{len(cert)} / Inf:{len(info)} / Hist:{len(hist)})", expanded=True):
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Certificado", len(cert))
+                    col2.metric("Informe", len(info))
+                    col3.metric("Historia", len(hist))
+                    col4.metric("Total", total)
 
-        # Botones de descarga (solo si hay páginas)
-        st.subheader("⬇️ Descargas")
-        c1, c2 = st.columns(2)
-        with c1:
-            if pdf_cert:
-                st.download_button("📄 Certificado de Aptitud", data=pdf_cert,
-                                   file_name="certificado_de_aptitud_all.pdf", mime="application/pdf")
-            else:
-                st.button("📄 Certificado de Aptitud (sin páginas)", disabled=True)
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.download_button("📄 Certificado", data=pdf_cert,
+                                           file_name=f"{Path(uploaded.name).stem}_certificado.pdf",
+                                           mime="application/pdf", disabled=(not pdf_cert), key=f"cert_{idx}")
+                        st.download_button("📄 Historia Clínica", data=pdf_hist,
+                                           file_name=f"{Path(uploaded.name).stem}_historia.pdf",
+                                           mime="application/pdf", disabled=(not pdf_hist), key=f"hist_{idx}")
+                    with c2:
+                        st.download_button("📄 Informe Médico", data=pdf_info,
+                                           file_name=f"{Path(uploaded.name).stem}_informe.pdf",
+                                           mime="application/pdf", disabled=(not pdf_info), key=f"info_{idx}")
+                        st.download_button("📦 Legajo (ordenado)", data=pdf_legajo,
+                                           file_name=f"{Path(uploaded.name).stem}_legajo.pdf",
+                                           mime="application/pdf", disabled=(not pdf_legajo), key=f"legajo_{idx}")
 
-            if pdf_hist:
-                st.download_button("📄 Historia Clínica", data=pdf_hist,
-                                   file_name="historia_clinica_all.pdf", mime="application/pdf")
-            else:
-                st.button("📄 Historia Clínica (sin páginas)", disabled=True)
-
-        with c2:
-            if pdf_info:
-                st.download_button("📄 Informe Médico", data=pdf_info,
-                                   file_name="informe_medico_all.pdf", mime="application/pdf")
-            else:
-                st.button("📄 Informe Médico (sin páginas)", disabled=True)
-
-            if pdf_legajo:
-                st.download_button("📦 Legajo (ordenado)", data=pdf_legajo,
-                                   file_name="legajo.pdf", mime="application/pdf")
-            else:
-                st.button("📦 Legajo (sin páginas)", disabled=True)
-
-        # ZIP con todo
-        with io.BytesIO() as zip_buffer:
-            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
-                if pdf_cert:
-                    z.writestr("certificado_de_aptitud_all.pdf", pdf_cert)
-                if pdf_info:
-                    z.writestr("informe_medico_all.pdf", pdf_info)
-                if pdf_hist:
-                    z.writestr("historia_clinica_all.pdf", pdf_hist)
-                if pdf_legajo:
-                    z.writestr("legajo.pdf", pdf_legajo)
-                # Debug opcional
+                # Agregar resultados de este archivo al ZIP maestro (en su carpeta)
+                base = Path(uploaded.name).stem
+                if pdf_cert:   zip_master.writestr(f"{base}/certificado.pdf", pdf_cert)
+                if pdf_info:   zip_master.writestr(f"{base}/informe.pdf", pdf_info)
+                if pdf_hist:   zip_master.writestr(f"{base}/historia.pdf", pdf_hist)
+                if pdf_legajo: zip_master.writestr(f"{base}/legajo.pdf", pdf_legajo)
                 if SHOW_DEBUG:
-                    z.writestr("debug/deteccion_por_pagina.txt", "\n".join(labels_log))
-            zip_buffer.seek(0)
-            st.download_button("🗜️ Descargar TODO (.zip)", data=zip_buffer.getvalue(),
-                               file_name="clasificados.zip", mime="application/zip")
+                    zip_master.writestr(f"{base}/debug_deteccion.txt", "\n".join(labels_log))
 
-        # Mostrar debug en pantalla si se activó
-        if SHOW_DEBUG:
-            st.divider()
-            st.subheader("🔎 Debug (etiquetas por página)")
-            st.code("\n".join(labels_log), language="text")
+            except Exception as e:
+                st.error(f"❌ {uploaded.name}: {e}")
 
-        # Nota para PDFs escaneados
-        if (len(cert) + len(info)) == 0:
-            st.warning("No se detectaron títulos. Si el PDF es escaneado (imágenes), necesitas OCR.")
-
-    except Exception as e:
-        st.error(f"Error leyendo el PDF: {e}")
+    # Botón para descargar TODO junto
+    zip_master_buffer.seek(0)
+    st.download_button("🗜️ Descargar TODO (todos los PDFs) .zip",
+                       data=zip_master_buffer.getvalue(),
+                       file_name="clasificados_todos.zip",
+                       mime="application/zip")
 else:
-    st.caption("Formato soportado: .pdf — El procesamiento ocurre en memoria (sin guardar archivos en disco).")
+    st.caption("Formatos soportados: .pdf — El procesamiento ocurre en memoria (sin guardar archivos en disco).")
