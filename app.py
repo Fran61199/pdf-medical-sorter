@@ -59,11 +59,17 @@ def has_title_in_lines(text: str, pattern: str, strict_start: bool) -> bool:
         else:
             if re.search(pattern, ln):
                 return True
-    # 2) encabezado unido: ignorar palabras previas (ej. 'examen periódico')
+    # 2) encabezado unido (maneja títulos partidos)
     head = normalize_text_hard(" ".join(lines))
     # quitar posibles encabezados previos
     head = re.sub(r"^(examen|periodico|evaluacion|ficha)\s+\w+\s+", "", head)
-    return re.search(pattern, head) is not None
+    if re.search(pattern, head):
+        return True
+    # 3) tolerar espaciado letra-a-letra: comparamos sin espacios
+    head_compact = head.replace(" ", "")
+    pat_compact  = re.sub(r"\s+", "", pattern)
+    return re.search(pat_compact, head_compact) is not None
+
 
 
 
