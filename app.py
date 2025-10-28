@@ -23,7 +23,7 @@ PAT_INFO = r"(?:informe\s+(?:del\s+)?(?:m[eé]dico(?:\s+ocupacional)?|examen\s+m
 # Variantes frecuentes para "CERTIFICADO DE APTITUD (MÉDICO) (OCUPACIONAL)"
 PAT_CERT_TITLES = [
   
-    r"certificad[oa]\s+(?:de\s+)?aptitud",  # genérico; lo validamos con heurística
+    r"certificad[oa]\s+(?:de\s+)?aptitud(?:\s+\w+){0,3}",  # genérico; lo validamos con heurística
 ]
 
 # =============== Utilidades de texto ===============
