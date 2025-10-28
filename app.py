@@ -13,7 +13,7 @@ from pypdf import PdfReader, PdfWriter
 STRICT_START = True        # más tolerante: no exige inicio exacto
 RELAXED_FALLBACK = False     # si no encuentra arriba, busca en TODO el texto de la página
 CERT_NEAR_WINDOW = 200      # ventana para proximidad "certificado ... aptitud"
-TOP_LINES_K = 4             # cuántas primeras líneas revisar
+TOP_LINES_K = 10            # cuántas primeras líneas revisar
 SHOW_DEBUG = False          # pon True si quieres ver el log en pantalla
 # -------------------------------------------
 
@@ -22,8 +22,7 @@ PAT_INFO = r"(?:informe\s+(?:del\s+)?(?:m[eé]dico(?:\s+ocupacional)?|examen\s+m
 
 # Variantes frecuentes para "CERTIFICADO DE APTITUD (MÉDICO) (OCUPACIONAL)"
 PAT_CERT_TITLES = [
-  
-    r"certificad[oa]\s+(?:de\s+)?aptitud(?:\s+\w+){0,3}",  # genérico; lo validamos con heurística
+    r"certificad[oa]\s+(?:m[eé]dic[ao](?:\s+ocupacional)?\s+)?(?:de\s+)?aptitud(?:\s+m[eé]dic[ao](?:\s+ocupacional)?)?"
 ]
 
 # =============== Utilidades de texto ===============
